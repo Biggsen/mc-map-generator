@@ -2,7 +2,9 @@
 
 ## 🎯 Project Overview
 
-A standalone microservice that generates high-quality Minecraft biome maps from seeds using Puppeteer automation. Takes seed + dimension as input, returns generated map image URLs.
+A standalone microservice that generates high-quality Minecraft biome maps from seeds using Puppeteer automation. Takes seed + dimension as input, returns generated map image URLs. 
+
+**MVP Focus**: Basic functionality with 8k world size, ephemeral storage, and Railway deployment.
 
 ## 📁 Repository Structure
 
@@ -150,23 +152,25 @@ GET /api/health
 - `nether`
 - `end`
 
-### Image Specifications
+### Image Specifications (MVP)
 - **Format**: PNG
-- **Size**: 1000x1000 pixels
+- **Size**: 1000x1000 pixels (8k world size only)
 - **Quality**: High (lossless)
 - **File Size**: ~200-500KB typical
+- **Storage**: Ephemeral (lost on deployment)
 
-## 💾 Storage Strategy
+## 💾 Storage Strategy (MVP)
 
-### Phase 1: Local Filesystem
+### Ephemeral Storage
 - Save to `./generated-maps/` directory
 - Serve via Express static middleware
-- Cleanup old files (7+ days)
+- **No cleanup needed** - files lost on deployment (acceptable for MVP)
+- **No persistent storage** - images are one-time use
 
-### Phase 2: AWS S3 (Future)
-- Upload to S3 bucket
-- Return S3 URLs
-- Automatic cleanup via S3 lifecycle
+### Future Enhancements
+- AWS S3 integration for persistent storage
+- File cleanup and lifecycle management
+- Caching strategies
 
 ## 🚀 Deployment Configuration
 
@@ -183,14 +187,13 @@ GET /api/health
 }
 ```
 
-### Environment Variables
+### Environment Variables (MVP)
 ```bash
 # .env.example
 PORT=3000
 NODE_ENV=production
 MAX_CONCURRENT_JOBS=3
-CLEANUP_INTERVAL_HOURS=24
-MAX_FILE_AGE_DAYS=7
+# Note: No cleanup variables needed for ephemeral storage
 ```
 
 ## 🧪 Testing Strategy
@@ -296,24 +299,29 @@ MAX_FILE_AGE_DAYS=7
 
 ### Phase 1: Core MVP (Week 1)
 - Basic Express server
-- Puppeteer screenshot generation
-- Local file storage
+- Puppeteer screenshot generation (8k world size only)
+- Ephemeral file storage
 - Simple API endpoints
 - Railway deployment
 
 ### Phase 2: Production Ready (Week 2)
 - Error handling & logging
-- File cleanup processes
 - Health checks
 - Basic monitoring
 - Documentation
 
-### Phase 3: Optimization (Week 3)
+### Phase 3: Enhancements (Week 3+)
+- 16k world size support
 - Performance tuning
 - Concurrent job handling
-- Storage optimization
 - Load testing
 - Production monitoring
+
+### Phase 4: Advanced Features (Future)
+- AWS S3 persistent storage
+- File cleanup processes
+- Caching strategies
+- Advanced monitoring
 
 ## 🏗 Implementation Details
 
