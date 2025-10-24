@@ -13,13 +13,15 @@ const __dirname = dirname(__filename);
  * @param {string} seed - The Minecraft seed
  * @param {string} dimension - The dimension (overworld, nether, end)
  * @param {string} jobId - Unique job identifier
+ * @param {number} size - The size (2-16, representing 2k-16k)
+ * @param {boolean} debug - Whether to save the original screenshot
  * @returns {Promise<Object>} Job result with status and image URL
  */
-export async function generateMap(seed, dimension, jobId) {
+export async function generateMap(seed, dimension, jobId, size = 8, debug = false) {
   let browser;
   
   try {
-    logInfo('Starting map generation', { seed, dimension, jobId });
+    logInfo('Starting map generation', { seed, dimension, jobId, size, debug });
     
     // Launch browser with optimized settings
     logInfo('Launching browser...', { jobId });
@@ -63,7 +65,7 @@ export async function generateMap(seed, dimension, jobId) {
     
     // Wait for map to fully load
     logInfo('Waiting for map to load...', { jobId });
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    await new Promise(resolve => setTimeout(resolve, 10000));
     
     // Take screenshot
     logInfo('Taking screenshot...', { jobId });
@@ -72,9 +74,18 @@ export async function generateMap(seed, dimension, jobId) {
       type: 'png'
     });
     
-    // Process and save the image
-    const processedImage = await processImage(screenshotBuffer, dimension, jobId);
-    const filename = `seed-${seed}-${dimension}-${Date.now()}.png`;
+    // Save the original screenshot if debug mode is enabled
+    let originalFilename, originalFilePath, originalImageUrl;
+    if (debug) {
+      originalFilename = `seed-${seed}-${dimension}-${size}k-original-${Date.now()}.png`;
+      originalFilePath = await saveImage(screenshotBuffer, originalFilename);
+      originalImageUrl = getImageUrl(originalFilename);
+      logInfo('Original screenshot saved (debug mode)', { jobId, originalFilename });
+    }
+    
+    // Process and save the cropped image
+    const processedImage = await processImage(screenshotBuffer, dimension, jobId, size);
+    const filename = `seed-${seed}-${dimension}-${size}k-${Date.now()}.png`;
     const filePath = await saveImage(processedImage, filename);
     const imageUrl = getImageUrl(filename);
     
@@ -82,6 +93,11 @@ export async function generateMap(seed, dimension, jobId) {
       jobId,
       filename,
       imageUrl,
+      ...(debug && {
+        originalFilename,
+        originalImageUrl,
+        originalFileSize: screenshotBuffer.length
+      }),
       fileSize: processedImage.length
     });
     
@@ -91,12 +107,20 @@ export async function generateMap(seed, dimension, jobId) {
       status: 'ready',
       imageUrl,
       filename,
+      ...(debug && {
+        originalImageUrl,
+        originalFilename
+      }),
       metadata: {
         seed,
         dimension,
+        size: `${size}k`,
         generatedAt: new Date().toISOString(),
         fileSize: `${Math.round(processedImage.length / 1024)}KB`,
-        dimensions: '1000x1000'
+        ...(debug && {
+          originalFileSize: `${Math.round(screenshotBuffer.length / 1024)}KB`
+        }),
+        dimensions: `${Math.round(size * 125)}x${Math.round(size * 125)}`
       }
     };
     
@@ -217,38 +241,36 @@ async function configureMarkers(page, jobId) {
  * @param {Buffer} screenshotBuffer - Raw screenshot buffer
  * @param {string} dimension - The dimension type
  * @param {string} jobId - Job identifier for logging
+ * @param {number} size - The size (2-16, representing 2k-16k)
  * @returns {Promise<Buffer>} Processed image buffer
  */
-async function processImage(screenshotBuffer, dimension, jobId) {
+async function processImage(screenshotBuffer, dimension, jobId, size = 8) {
   try {
-    logInfo('Processing image...', { jobId, dimension });
+    logInfo('Processing image...', { jobId, dimension, size });
     
-    // Set crop parameters and final size based on dimension
-    let cropParams, finalSize;
+    // Calculate crop parameters using the correct formula
+    // Base coordinates for 16k: left: 720, top: 120
+    // For each k reduction: add 62.5px to left/top (half of 125px)
+    // Size is simply k × 125
+    const left = Math.round(720 + (16 - size) * 62.5);
+    const top = Math.round(120 + (16 - size) * 62.5);
+    const width = Math.round(size * 125);
+    const height = Math.round(size * 125);
     
-    if (dimension === 'nether') {
-      // Nether crop parameters
-      cropParams = {
-        left: 720,
-        top: 120,
-        width: 2000,
-        height: 2000
-      };
-      finalSize = 1000;
-    } else {
-      // Overworld/End crop parameters (8k world size for MVP)
-      cropParams = {
-        left: 1220,
-        top: 620,
-        width: 1000,
-        height: 1000
-      };
-      finalSize = 1000;
-    }
+    const cropParams = {
+      left,
+      top,
+      width,
+      height
+    };
+    
+    // Final size matches the crop dimensions
+    const finalSize = width;
     
     logInfo('Cropping and resizing image', {
       jobId,
       dimension,
+      size,
       cropParams,
       finalSize
     });
@@ -272,6 +294,7 @@ async function processImage(screenshotBuffer, dimension, jobId) {
     logError('Image processing failed', {
       jobId,
       dimension,
+      size,
       error: error.message
     });
     throw error;

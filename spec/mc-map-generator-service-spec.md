@@ -72,7 +72,8 @@ Content-Type: application/json
 
 {
   "seed": "12345",
-  "dimension": "overworld"
+  "dimension": "overworld",
+  "size": 8
 }
 ```
 
@@ -111,6 +112,7 @@ GET /api/status/{jobId}
   "metadata": {
     "seed": "12345",
     "dimension": "overworld",
+    "size": "8k",
     "generatedAt": "2023-12-21T10:30:45Z",
     "fileSize": "245KB",
     "dimensions": "1000x1000"
@@ -151,9 +153,14 @@ GET /api/health
 - `nether`
 - `end`
 
+### Supported Sizes
+- Integer from 2 to 16 (representing 2k to 16k world size)
+- Default: 8 (8k world size)
+- Each increment represents 1k blocks
+
 ### Image Specifications (MVP)
 - **Format**: PNG
-- **Size**: 1000x1000 pixels (8k world size only)
+- **Size**: 1000x1000 pixels (final output, regardless of world size)
 - **Quality**: High (lossless)
 - **File Size**: ~200-500KB typical
 - **Storage**: Ephemeral (lost on deployment)

@@ -46,6 +46,16 @@ export function normalizeDimension(dimension) {
 }
 
 /**
+ * Validate size input
+ * @param {number} size - The size to validate (2-16)
+ * @returns {boolean} True if valid size
+ */
+export function isValidSize(size) {
+  const numSize = parseInt(size);
+  return !isNaN(numSize) && numSize >= 2 && numSize <= 16;
+}
+
+/**
  * Create structured log entry
  * @param {string} level - Log level (info, error, warn, debug)
  * @param {string} message - Log message

@@ -7,6 +7,7 @@ import {
   generateJobId, 
   isValidSeed, 
   isValidDimension, 
+  isValidSize,
   normalizeDimension,
   createErrorResponse,
   createSuccessResponse,
@@ -37,7 +38,7 @@ app.use('/generated-maps', express.static('./generated-maps'));
  */
 app.post('/api/generate', async (req, res) => {
   try {
-    const { seed, dimension = 'overworld' } = req.body;
+    const { seed, dimension = 'overworld', size = 8, debug = false } = req.body;
     
     // Validate input
     if (!isValidSeed(seed)) {
@@ -49,6 +50,12 @@ app.post('/api/generate', async (req, res) => {
     if (!isValidDimension(dimension)) {
       return res.status(400).json(
         createErrorResponse('INVALID_DIMENSION', 'Dimension must be one of: overworld, nether, end')
+      );
+    }
+    
+    if (!isValidSize(size)) {
+      return res.status(400).json(
+        createErrorResponse('INVALID_SIZE', 'Size must be an integer between 2 and 16 (representing 2k-16k)')
       );
     }
     
@@ -67,6 +74,8 @@ app.post('/api/generate', async (req, res) => {
       status: 'processing',
       seed,
       dimension: normalizedDimension,
+      size: parseInt(size),
+      debug: Boolean(debug),
       createdAt: new Date().toISOString(),
       progress: 'Starting map generation...'
     });
@@ -77,11 +86,13 @@ app.post('/api/generate', async (req, res) => {
       jobId,
       seed,
       dimension: normalizedDimension,
+      size: parseInt(size),
+      debug: Boolean(debug),
       activeJobs
     });
     
     // Start map generation in background
-    generateMap(seed, normalizedDimension, jobId)
+    generateMap(seed, normalizedDimension, jobId, parseInt(size), Boolean(debug))
       .then(result => {
         jobs.set(jobId, {
           ...jobs.get(jobId),
