@@ -64,9 +64,9 @@ export async function saveImage(buffer, filename) {
  * @returns {string} Public URL for the image
  */
 export function getImageUrl(filename) {
-  // For MVP, we'll use relative paths since we're serving static files
-  // In production, this would be the full domain URL
-  return `/generated-maps/${filename}`;
+  // Use BASE_URL environment variable or default to localhost
+  const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3001}`;
+  return `${baseUrl}/generated-maps/${filename}`;
 }
 
 /**
