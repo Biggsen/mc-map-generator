@@ -172,7 +172,9 @@ app.get('/api/status/:jobId', async (req, res) => {
       jobId,
       status: job.status,
       ...(job.status === 'ready' && {
-        imageUrl: job.imageUrl,
+        terrainUrl: job.terrainUrl,
+        ...(job.biomeUrl && { biomeUrl: job.biomeUrl }),
+        imageUrl: job.terrainUrl,
         metadata: job.metadata
       }),
       ...(job.status === 'processing' && {

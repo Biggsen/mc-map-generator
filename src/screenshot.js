@@ -83,16 +83,37 @@ export async function generateMap(seed, dimension, jobId, size = 8, debug = fals
       logInfo('Original screenshot saved (debug mode)', { jobId, originalFilename });
     }
     
-    // Process and save the cropped image
+    // Process and save the terrain image
     const processedImage = await processImage(screenshotBuffer, dimension, jobId, size);
-    const filename = `seed-${seed}-${dimension}-${size}k-${Date.now()}.png`;
-    const filePath = await saveImage(processedImage, filename);
-    const imageUrl = getImageUrl(filename);
-    
+    const timestamp = Date.now();
+    const terrainFilename = `seed-${seed}-${dimension}-${size}k-${timestamp}.png`;
+    await saveImage(processedImage, terrainFilename);
+    const terrainUrl = getImageUrl(terrainFilename);
+
+    let biomeUrl, biomeFilename;
+    if (dimension === 'overworld') {
+      await toggleSidebar(page, jobId);
+      await switchToBiomeView(page, jobId);
+      logInfo('Waiting for biome map to load...', { jobId });
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      logInfo('Taking biome screenshot...', { jobId });
+      const biomeScreenshotBuffer = await page.screenshot({
+        fullPage: true,
+        type: 'png'
+      });
+      const processedBiomeImage = await processImage(biomeScreenshotBuffer, dimension, jobId, size);
+      biomeFilename = `seed-${seed}-${dimension}-${size}k-biome-${timestamp}.png`;
+      await saveImage(processedBiomeImage, biomeFilename);
+      biomeUrl = getImageUrl(biomeFilename);
+      logInfo('Biome screenshot captured', { jobId, biomeFilename });
+    }
+
     logInfo('Map generation completed successfully', {
       jobId,
-      filename,
-      imageUrl,
+      terrainFilename,
+      terrainUrl,
+      ...(biomeUrl && { biomeFilename, biomeUrl }),
       ...(debug && {
         originalFilename,
         originalImageUrl,
@@ -100,13 +121,13 @@ export async function generateMap(seed, dimension, jobId, size = 8, debug = fals
       }),
       fileSize: processedImage.length
     });
-    
-    return {
+
+    const result = {
       success: true,
       jobId,
       status: 'ready',
-      imageUrl,
-      filename,
+      terrainUrl,
+      filename: terrainFilename,
       ...(debug && {
         originalImageUrl,
         originalFilename
@@ -123,6 +144,11 @@ export async function generateMap(seed, dimension, jobId, size = 8, debug = fals
         dimensions: `${Math.round(size * 125)}x${Math.round(size * 125)}`
       }
     };
+    if (biomeUrl) {
+      result.biomeUrl = biomeUrl;
+      result.biomeFilename = biomeFilename;
+    }
+    return result;
     
   } catch (error) {
     logError('Map generation failed', {
@@ -197,6 +223,39 @@ async function toggleSidebar(page, jobId) {
     
   } catch (error) {
     logWarn('Toggle sidebar button not found', { jobId, error: error.message });
+  }
+}
+
+/**
+ * Switch to biome view (terrain estimation off) for overworld dual capture
+ * @param {Object} page - Puppeteer page object
+ * @param {string} jobId - Job identifier for logging
+ */
+async function switchToBiomeView(page, jobId) {
+  try {
+    logInfo('Switching to biome view...', { jobId });
+    await page.click('button[title="Map settings"]');
+    logInfo('Clicked Map Settings tab', { jobId });
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const clicked = await page.evaluate(() => {
+      const label = [...document.querySelectorAll('label')].find(
+        l => l.textContent.includes('Terrain estimation')
+      );
+      if (label) {
+        label.click();
+        return true;
+      }
+      return false;
+    });
+    if (clicked) {
+      logInfo('Toggled Terrain estimation off', { jobId });
+    } else {
+      logWarn('Terrain estimation toggle not found', { jobId });
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  } catch (error) {
+    logWarn('switchToBiomeView failed', { jobId, error: error.message });
   }
 }
 

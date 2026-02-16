@@ -101,6 +101,7 @@ Currently focused on maintaining production stability and preparing for enhancem
 - [x] Structured logging
 - [x] Static file serving for generated images
 - [x] Ephemeral file storage (local filesystem)
+- [x] Overworld dual view (terrain + biome) — returns `terrainUrl` and `biomeUrl` for overworld
 - [x] README.md - Quick start and overview
 - [x] docs/API.md - Complete API documentation
 - [x] tasks/completed/mc-map-generator-service-spec.md - Technical specification
@@ -113,6 +114,7 @@ Currently focused on maintaining production stability and preparing for enhancem
 - Puppeteer browser automation with UI interaction handling
 - Image processing pipeline (screenshot → crop → resize)
 - Support for all Minecraft dimensions and world sizes
+- Overworld dual view: terrain + biome screenshots (`terrainUrl`, `biomeUrl`)
 - Concurrent job management with resource limits
 
 #### API Endpoints
