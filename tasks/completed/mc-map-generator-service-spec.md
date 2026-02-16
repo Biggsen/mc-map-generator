@@ -4,7 +4,15 @@
 
 A standalone microservice that generates high-quality Minecraft biome maps from seeds using Puppeteer automation. Takes seed + dimension as input, returns generated map image URLs. 
 
-**MVP Focus**: Basic functionality with 8k world size, ephemeral storage, and Railway deployment.
+**MVP Focus**: Basic functionality with 2k–16k world sizes, ephemeral storage, and Railway deployment.
+
+## 📋 Outstanding Tasks (see task files)
+
+| Task | File | Status |
+|------|------|--------|
+| Testing suite | [../testing/testing.md](../testing/testing.md) | Not started |
+| Performance & monitoring | [../enhancements/performance-monitoring.md](../enhancements/performance-monitoring.md) | Future |
+| Future enhancements | [../enhancements/future-enhancements.md](../enhancements/future-enhancements.md) | Future |
 
 ## 📁 Repository Structure ✅ IMPLEMENTED
 
@@ -19,9 +27,9 @@ mc-map-generator/
 ├── tests/                      # ❌ Not implemented (future enhancement)
 │   ├── api.test.js            # API endpoint tests
 │   └── screenshot.test.js     # Screenshot generation tests
-├── docs/                       # ❌ Not implemented (future enhancement)
-│   ├── API.md                 # API documentation
-│   └── DEPLOYMENT.md          # Deployment guide
+├── docs/                       # ✅ Partial
+│   ├── API.md                 # ✅ Complete API documentation
+│   └── DEPLOYMENT.md          # ❌ Not yet (future enhancement)
 ├── package.json               # ✅ Complete
 ├── railway.json               # ✅ Railway deployment config
 ├── .env.example              # ✅ Environment variables template (exists but Cursor not aware)
@@ -38,14 +46,14 @@ mc-map-generator/
   "type": "module",
   "dependencies": {
     "express": "^4.18.0",
-    "puppeteer": "^22.0.0",
+    "puppeteer": "^24.0.0",
     "sharp": "^0.33.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.0"
   },
   "devDependencies": {
     "jest": "^29.0.0",
-    "supertest": "^6.0.0"
+    "supertest": "^7.1.3"
   },
   "scripts": {
     "start": "node src/server.js",
@@ -58,10 +66,9 @@ mc-map-generator/
 
 ## 🔌 API Specification
 
-### Base URL
-```
-https://mc-map-generator.railway.app
-```
+### Base URLs
+- **Production:** `https://mc-map-generator-production.up.railway.app`
+- **Local:** `http://localhost:3001`
 
 ### Endpoints
 
@@ -73,11 +80,18 @@ Content-Type: application/json
 {
   "seed": "12345",
   "dimension": "overworld",
-  "size": 8
+  "size": 8,
+  "debug": false
 }
 ```
 
-**Response:**
+**Parameters:**
+- `seed` (required): Minecraft seed (string or number)
+- `dimension` (optional): `"overworld"`, `"nether"`, or `"end"` (default: `"overworld"`)
+- `size` (optional): 2-16 for 2k-16k world (default: `8`)
+- `debug` (optional): Save original screenshot before crop (default: `false`)
+
+**Success Response (200):**
 ```json
 {
   "success": true,
@@ -86,6 +100,8 @@ Content-Type: application/json
   "estimatedTime": "30-60 seconds"
 }
 ```
+
+**Error Responses:** 400 (INVALID_SEED, INVALID_DIMENSION, INVALID_SIZE), 429 (TOO_MANY_JOBS), 500 (SERVER_ERROR)
 
 #### 2. Check Status
 ```http
@@ -108,7 +124,7 @@ GET /api/status/{jobId}
   "success": true,
   "jobId": "seed-12345-overworld-1703123456789",
   "status": "ready",
-  "imageUrl": "https://mc-map-generator.railway.app/generated-maps/seed-12345-overworld-1703123456789.png",
+  "imageUrl": "https://mc-map-generator-production.up.railway.app/generated-maps/seed-12345-overworld-8k-1703123456789.png",
   "metadata": {
     "seed": "12345",
     "dimension": "overworld",
@@ -120,6 +136,22 @@ GET /api/status/{jobId}
 }
 ```
 
+When `debug: true` was used in the generate request, the ready response also includes `originalImageUrl` and `originalFilename`.
+
+**Response (Failed):**
+```json
+{
+  "success": true,
+  "jobId": "seed-12345-overworld-1703123456789",
+  "status": "failed",
+  "error": "GENERATION_FAILED",
+  "message": "Failed to generate map: Network timeout",
+  "retryable": true
+}
+```
+
+**404 - Job Not Found:** `JOB_NOT_FOUND`
+
 #### 3. Health Check
 ```http
 GET /api/health
@@ -128,25 +160,64 @@ GET /api/health
 **Response:**
 ```json
 {
+  "success": true,
   "status": "healthy",
   "timestamp": "2023-12-21T10:30:45Z",
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "activeJobs": 2,
+  "maxConcurrentJobs": 3
+}
+```
+
+#### 4. Service Statistics
+```http
+GET /api/stats
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "totalJobs": 15,
+  "completedJobs": 12,
+  "failedJobs": 1,
+  "processingJobs": 2,
+  "activeJobs": 2,
+  "maxConcurrentJobs": 3
+}
+```
+
+#### 5. Cleanup Old Jobs
+```http
+POST /api/cleanup
+```
+
+Removes completed/failed jobs older than 24 hours from in-memory tracking. Does not delete image files (ephemeral storage).
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Cleanup completed",
+  "cleanedCount": 5,
+  "remainingJobs": 10
 }
 ```
 
 ## 🖼 Image Generation Process
 
 ### Screenshot Workflow
-1. Launch Puppeteer browser
-2. Navigate to `https://mcseedmap.net/1.21.5-Java/{seed}/{dimension}`
-3. Handle cookie banner
+1. Launch Puppeteer browser (headless, sandbox-disabled for Railway)
+2. Navigate to `https://mcseedmap.net/1.21.5-Java/{seed}/{dimension}` (overworld/end use `#l=-3` hash)
+3. Handle cookie banner (Manage options → Confirm choices)
 4. Toggle sidebar for clean view
-5. Wait for map to load
-6. Take full-page screenshot (3840x2160)
-7. Crop to map area (2000x2000)
-8. Resize to final size (1000x1000)
-9. Save to storage
-10. Return image URL
+5. Configure markers: open Markers tab, enable Village markers
+6. Wait for map to load (~10s)
+7. Take full-page screenshot (3840×2160)
+8. Optionally save original if `debug: true`
+9. Crop to map area: `left = 720 + (16-size)×62.5`, `top = 120 + (16-size)×62.5`, `width/height = size×125`
+10. Resize to final dimensions (crop size = output size)
+11. Save to storage, return image URL
 
 ### Supported Dimensions
 - `overworld` (default)
@@ -158,9 +229,12 @@ GET /api/health
 - Default: 8 (8k world size)
 - Each increment represents 1k blocks
 
+### Job ID Format
+`seed-{seed}-{dimension}-{timestamp}` (e.g. `seed-12345-overworld-1703123456789`)
+
 ### Image Specifications (MVP)
 - **Format**: PNG
-- **Size**: 1000x1000 pixels (final output, regardless of world size)
+- **Dimensions**: `size × 125` pixels (e.g. 2k→250×250, 8k→1000×1000, 16k→2000×2000)
 - **Quality**: High (lossless)
 - **File Size**: ~200-500KB typical
 - **Storage**: Ephemeral (lost on deployment)
@@ -195,53 +269,18 @@ GET /api/health
 
 ### Environment Variables (MVP)
 ```bash
-# .env.example
-PORT=3000
+PORT=3001
 NODE_ENV=production
 MAX_CONCURRENT_JOBS=3
-# Note: No cleanup variables needed for ephemeral storage
+BASE_URL=https://mc-map-generator-production.up.railway.app  # or localhost for dev
 ```
 
 ## 🧪 Testing Strategy
 
-### Unit Tests
-- API endpoint responses
-- Screenshot generation logic
-- File storage operations
-- Error handling
-
-### Integration Tests
-- End-to-end map generation
-- File cleanup processes
-- Concurrent job handling
-
-### Load Testing
-- Multiple simultaneous requests
-- Memory usage monitoring
-- Browser resource cleanup
-
-## 📊 Monitoring & Logging
-
-### Key Metrics
-- Request count per minute
-- Average generation time
-- Success/failure rates
-- Storage usage
-- Memory consumption
-
-### Logging
-```javascript
-// Structured logging format
-{
-  "timestamp": "2023-12-21T10:30:45Z",
-  "level": "info",
-  "service": "mc-map-generator",
-  "jobId": "seed-12345-overworld-1703123456789",
-  "message": "Map generation completed",
-  "duration": 45000,
-  "fileSize": 245760
-}
-```
+See **[testing/testing.md](../testing/testing.md)** for detailed test spec:
+- Unit tests (API, storage, utils)
+- Integration tests (screenshot flow)
+- Load testing approach
 
 ## 🔒 Error Handling
 
@@ -268,7 +307,7 @@ MAX_CONCURRENT_JOBS=3
 ### MVP Requirements ✅ ALL COMPLETED
 - ✅ Generate maps from any valid seed
 - ✅ Support all three dimensions
-- ✅ Return high-quality 1000x1000 images
+- ✅ Return high-quality images (size×125 pixels, e.g. 1000×1000 for 8k)
 - ✅ Handle 3+ concurrent requests
 - ✅ Deploy to Railway successfully
 - ✅ 95%+ uptime
@@ -283,29 +322,20 @@ MAX_CONCURRENT_JOBS=3
 
 ## 📚 Documentation Requirements
 
-### README.md
-- Quick start guide
-- API usage examples
-- Local development setup
-- Deployment instructions
+### README.md ✅
+- Quick start guide, API examples, local dev setup
 
-### API.md
-- Complete endpoint documentation
-- Request/response examples
-- Error codes reference
-- Rate limiting info
+### API.md ✅
+- Endpoint docs, request/response examples, error codes, rate limiting
 
 ### DEPLOYMENT.md
-- Railway deployment steps
-- Environment configuration
-- Monitoring setup
-- Troubleshooting guide
+- Railway deployment steps, environment configuration, troubleshooting (deployed)
 
 ## 🔄 Development Phases
 
 ### Phase 1: Core MVP (Week 1) ✅ COMPLETED
 - ✅ Basic Express server
-- ✅ Puppeteer screenshot generation (8k world size only)
+- ✅ Puppeteer screenshot generation (2k–16k world sizes)
 - ✅ Ephemeral file storage
 - ✅ Simple API endpoints
 - ✅ Railway deployment
@@ -317,17 +347,10 @@ MAX_CONCURRENT_JOBS=3
 - ✅ Documentation (README.md)
 
 ### Phase 3: Enhancements (Week 3+)
-- 16k world size support
-- Performance tuning
-- Concurrent job handling
-- Load testing
-- Production monitoring
+See **[enhancements/performance-monitoring.md](../enhancements/performance-monitoring.md)**.
 
 ### Phase 4: Advanced Features (Future)
-- AWS S3 persistent storage
-- File cleanup processes
-- Caching strategies
-- Advanced monitoring
+See **[enhancements/future-enhancements.md](../enhancements/future-enhancements.md)**.
 
 ## 🏗 Implementation Details
 
@@ -356,9 +379,9 @@ app.get('/api/status/:jobId', (req, res) => {
   // Implementation here
 });
 
-app.get('/api/health', (req, res) => {
-  // Implementation here
-});
+app.get('/api/health', (req, res) => { /* ... */ });
+app.get('/api/stats', async (req, res) => { /* ... */ });
+app.post('/api/cleanup', (req, res) => { /* ... */ });
 
 // Serve generated images
 app.use('/generated-maps', express.static('./generated-maps'));
@@ -376,46 +399,36 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-export async function generateMap(seed, dimension, jobId) {
-  // Based on your existing screenshot-mcseedmap.js
-  // Simplified and adapted for the service
+export async function generateMap(seed, dimension, jobId, size = 8, debug = false) {
+  // Puppeteer → mcseedmap.net → cookie/sidebar/markers → screenshot → sharp crop/resize → storage
 }
 ```
 
 #### 3. `src/storage.js`
 ```javascript
-import fs from 'fs/promises';
-import path from 'path';
-
-export async function saveImage(buffer, filename) {
-  // Save image to generated-maps directory
-}
-
-export function getImageUrl(filename) {
-  // Return public URL for the image
-}
-
-export async function cleanupOldFiles() {
-  // Remove files older than MAX_FILE_AGE_DAYS
-}
+export async function saveImage(buffer, filename) { /* ... */ }
+export function getImageUrl(filename) { /* Uses BASE_URL env */ }
+export function getImagePath(filename) { /* ... */ }
+export async function imageExists(filename) { /* ... */ }
+export async function getImageStats(filename) { /* size, sizeFormatted, created */ }
+export async function deleteImage(filename) { /* ... */ }
+export async function listImages() { /* ... */ }
+export async function getStorageInfo() { /* ... */ }
 ```
+
+No automatic file cleanup (ephemeral storage). Job cleanup via `POST /api/cleanup` removes in-memory job entries only.
 
 ### Key Implementation Notes
 
-1. **Job Management**: Use in-memory Map to track job status
+1. **Job Management**: In-memory Map tracks job status; `POST /api/cleanup` prunes jobs older than 24h
 2. **Async Processing**: Generate maps in background, return job ID immediately
-3. **Error Recovery**: Handle Puppeteer crashes gracefully
-4. **Resource Cleanup**: Ensure browsers are closed properly
-5. **File Management**: Implement automatic cleanup of old images
+3. **Error Recovery**: Puppeteer crashes return `status: 'failed'` with `retryable: true`
+4. **Resource Cleanup**: Browser closed in `finally` block
+5. **Response Wrapper**: All responses use `createSuccessResponse` / `createErrorResponse` (includes `success` field)
 
-### Based on Current Code
+### Implementation Status
 
-This spec is derived from your existing:
-- `scripts/screenshot-mcseedmap.js` - Core Puppeteer logic
-- `scripts/api-server.js` - Express server structure
-- `package.json` - Dependencies (puppeteer, sharp, express)
-
-The new service will be a simplified, focused version of your current implementation, designed for standalone deployment and external API consumption.
+The service is implemented in `src/` with the above structure. All API endpoints, screenshot workflow, and storage logic are in place and deployed to Railway.
 
 ---
 

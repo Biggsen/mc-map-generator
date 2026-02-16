@@ -103,7 +103,7 @@ Currently focused on maintaining production stability and preparing for enhancem
 - [x] Ephemeral file storage (local filesystem)
 - [x] README.md - Quick start and overview
 - [x] docs/API.md - Complete API documentation
-- [x] spec/mc-map-generator-service-spec.md - Technical specification
+- [x] tasks/completed/mc-map-generator-service-spec.md - Technical specification
 
 ### Detailed Completed Features
 
@@ -374,5 +374,5 @@ Currently focused on maintaining production stability and preparing for enhancem
 
 - **README.md** - Quick start and overview
 - **docs/API.md** - Complete API documentation with examples
-- **spec/mc-map-generator-service-spec.md** - Technical specification
-- **tasks/step1-setup.md** - Setup task completion log
+- **tasks/completed/mc-map-generator-service-spec.md** - Technical specification
+- **tasks/completed/step1-setup.md** - Setup task completion log
