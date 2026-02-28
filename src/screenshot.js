@@ -260,7 +260,7 @@ async function switchToBiomeView(page, jobId) {
 }
 
 /**
- * Configure markers for better map display
+ * Configure markers for clean map display: turn off Spawn point and Village (both on by default)
  * @param {Object} page - Puppeteer page object
  * @param {string} jobId - Job identifier for logging
  */
@@ -273,10 +273,29 @@ async function configureMarkers(page, jobId) {
     
     // Wait for markers panel to load
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Click on the Village button
-    logInfo('Looking for Village button...', { jobId });
-    await page.evaluate(() => {
+
+    // Turn off Spawn point (on by default)
+    logInfo('Turning off Spawn point...', { jobId });
+    const spawnOff = await page.evaluate(() => {
+      const label = [...document.querySelectorAll('label')].find(
+        l => l.textContent.includes('Spawn point')
+      );
+      if (label) {
+        label.click();
+        return true;
+      }
+      return false;
+    });
+    if (spawnOff) {
+      logInfo('Spawn point turned off', { jobId });
+    } else {
+      logWarn('Spawn point switch not found', { jobId });
+    }
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Turn off Village marker (on by default under Structures)
+    logInfo('Turning off Village marker...', { jobId });
+    const villageOff = await page.evaluate(() => {
       const buttons = Array.from(document.querySelectorAll('button'));
       const villageButton = buttons.find(btn => btn.textContent.includes('Village'));
       if (villageButton) {
@@ -285,9 +304,11 @@ async function configureMarkers(page, jobId) {
       }
       return false;
     });
-    logInfo('Clicked Village button', { jobId });
-    
-    // Wait for village markers to appear
+    if (villageOff) {
+      logInfo('Village marker turned off', { jobId });
+    } else {
+      logWarn('Village button not found', { jobId });
+    }
     await new Promise(resolve => setTimeout(resolve, 2000));
     
   } catch (error) {
