@@ -43,10 +43,7 @@ export async function generateMap(seed, dimension, jobId, size = 8, debug = fals
     // Set viewport for consistent screenshot size
     await page.setViewport({ width: 3840, height: 2160 });
     
-    // Build URL with dimension in the path
-    const url = dimension === 'nether' 
-      ? `https://mcseedmap.net/1.21.5-Java/${seed}/${dimension}`
-      : `https://mcseedmap.net/1.21.5-Java/${seed}/${dimension}#l=-3`;
+    const url = `https://mcseedmap.net/1.21.5-Java/${seed}/${dimension}#l=-3`;
     
     logInfo('Navigating to mcseedmap.net', { jobId, url });
     await page.goto(url, { 
